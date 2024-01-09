@@ -26,6 +26,11 @@ class Value():
     def __radd__(self,other):
         return self+other
     
+    def __neg__(self):  # -self
+        return self*(-1)
+    
+    def __sub__(self,other ):   #self-other
+        return self +(-other)
 
     def __mul__(self, other):
         other= other if isinstance(other, Value) else Value(other)
@@ -34,11 +39,27 @@ class Value():
             self.grad += other.data * out.grad
             other.grad += self.data *out.grad
         out._backward= _backward
-
         return out
     def __rmul__(self, other):
         return self*other
     
+    def __truediv__(self, other):   #self/other
+        return self*other**-1
+    ''' we can use __pow__() to divide too : a/b = a*(1/b) = a*(b**-1)
+     we have to redefine division above in the method __truediv__(): 
+     we will also implement __pow__() function. we do this for powers other than Value objects viz: ints and floats.
+     refer video: https://youtu.be/VMj-3S1tku0?list=PLAqhIrjkxbuWI23v9cThsA9GvCAUhRvKZ&t=5596'''
+    
+    def __pow__(self, other):  #self**other (other is a number and not a Value obj)
+        assert isinstance(other,(int,float)), 'only supporting int/float powers for now '
+        out= Value(self.data**other, (self, ), f'**{other}')
+        def _backward():
+            # d(x**n)/dx= n(x**(n-1))
+            self.grad += (other * self.data**(other -1))* out.grad
+        out._backward= _backward
+        return out
+
+
     def tanh(self):
         x= self.data
         # out = Value(math.exp(2*x)-1)/(math.exp(2*x) + 1)
@@ -49,7 +70,13 @@ class Value():
         out._backward=_backward
         return out
     
-
+     def exp(self):
+        x= self.data
+        out = Value(math.exp(x), (self, ) , 'exp')
+        def _backward():
+            self.grad += out.data * out.grad     #since e**x 's derivative is same i.e. e**x
+        out._backward = _backward
+        return out
     
     def backward(self):
         topo=[]
@@ -97,9 +124,43 @@ print(e, f)
 # '''
 
 
-f.backward()
-print(f.grad)
-print(e.grad)
+# f.backward()
+# print(f.grad)
+# print(d.grad)
+# print(a.grad)
 
+class Neuron():
+    def __init__(self, nin):
+        self.w= [Value(random.uniform(-1,1) for i in range(nin))]
+        self.b= Value(random.uniform(-1,1))
+    def __call__(self, x):
+        act= sum((wi*xi for wi,xi in zip(self.w, x)), self.b)
+        out= act.tanh()
+        return out
+    def parameters(self):
+        return self.w +[self.b]
 
+class Layer():
+    def __init__(self, nin, nout):
+        self.neurons= [Neuron(nin) for i in range(nout)]
+    
+    def __call__(self, x):
+        outs= [n(x) for n in self.neurons]
+        return outs[0] if len(outs)==1 else outs
+    
+    def parameters(self):
+        return [p for neuron in self.neurons for p in neuron.parameters()]
 
+class MLP:
+    def __init__(self, nin, nouts):
+        sz= [nin] + nouts 
+        self.layers = [Layer(sz[i], sz[i+1]) for i in range(len(nouts))]
+
+    def __call__(self, x):
+        for layer in self.layers:
+            x= layer(x)
+        return x
+    
+    def parameters(self):
+        return [p for layer in self.layers for p in layer.parameters()]
+    
