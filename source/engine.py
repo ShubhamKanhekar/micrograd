@@ -14,7 +14,14 @@ class Value():
     def __repr__(self):
         return f'Value({self.data}, grad= {self.grad})'
     
-
+    def __gt__(self, other):
+        out= self.data> other.data
+        def _backward():
+            self.grad +=out.grad
+            other.grad += out.grad
+        out._backward= _backward
+        return out
+    
     def __add__(self, other):
         other=other if isinstance(other, Value) else Value(other)
         out= Value(self.data + other.data, _prev=[self, other], _op='+')
